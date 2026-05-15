@@ -83,9 +83,10 @@ function saveToStorage() {
 async function syncToSheets() {
   if (!SHEETS_URL) return;
   try {
-    // Envia os dados via GET com payload em URL para evitar problema de CORS
-    const payload = encodeURIComponent(JSON.stringify({ action: 'save', clients }));
-    await fetch(SHEETS_URL + '?data=' + payload, { method: 'GET' });
+    const form = new FormData();
+    form.append('action', 'save');
+    form.append('clients', JSON.stringify(clients));
+    await fetch(SHEETS_URL, { method: 'POST', body: form });
   } catch (e) { /* silent fail */ }
 }
 
