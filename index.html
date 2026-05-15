@@ -137,9 +137,14 @@
 
   <!-- DASHBOARD PAGE -->
   <section id="page-dashboard" class="page active">
-    <div class="page-header">
-      <h1>🏠 Dashboard</h1>
-      <p class="page-subtitle" id="dashDate"></p>
+    <div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem">
+      <div>
+        <h1>🏠 Dashboard</h1>
+        <p class="page-subtitle" id="dashDate"></p>
+      </div>
+      <button class="btn btn-outline" onclick="syncNow()" id="syncBtn" style="display:flex;align-items:center;gap:0.5rem">
+        🔄 Atualizar
+      </button>
     </div>
 
     <!-- KPI CARDS -->
