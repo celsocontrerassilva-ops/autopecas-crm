@@ -155,6 +155,21 @@ function showToast(msg, type = 'success') {
   setTimeout(() => t.classList.remove('show'), 3000);
 }
 
+// ---- SYNC NOW ----
+async function syncNow() {
+  const btn = document.getElementById('syncBtn');
+  btn.textContent = '⏳ Sincronizando...';
+  btn.disabled = true;
+  await loadData();
+  renderDashboard();
+  renderContactsDay();
+  renderClients();
+  renderRanking();
+  btn.textContent = '🔄 Atualizar';
+  btn.disabled = false;
+  showToast('✅ Dados atualizados!');
+}
+
 // ---- NAVIGATION ----
 function navigate(page) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
