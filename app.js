@@ -10,23 +10,14 @@ let importBuffer = [];
 let SHEETS_URL = '';
 
 // ---- INIT ----
-document.addEventListener('DOMContentLoaded', () => {
-  loadFromStorage();
+document.addEventListener('DOMContentLoaded', async () => {
   SHEETS_URL = localStorage.getItem('sheetsUrl') || '';
   if (document.getElementById('sheetsUrl')) {
     document.getElementById('sheetsUrl').value = SHEETS_URL;
   }
-  renderDashboard();
-  renderContactsDay();
-  renderClients();
-  renderRanking();
 
-  const today = new Date().toLocaleDateString('pt-BR', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
-  document.getElementById('dashDate').textContent = today.charAt(0).toUpperCase() + today.slice(1);
-
-  setTimeout(() => {
-    document.getElementById('loadingOverlay').classList.add('hidden');
-  }, 600);
+  const todayStr = new Date().toLocaleDateString('pt-BR', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  document.getElementById('dashDate').textContent = todayStr.charAt(0).toUpperCase() + todayStr.slice(1);
 
   // Import file listener
   const dropZone = document.getElementById('dropZone');
@@ -41,9 +32,37 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('f_cnpj').addEventListener('input', function() {
     this.value = cnpjMask(this.value);
   });
+
+  // Load data: try Sheets first, fallback to localStorage
+  await loadData();
+
+  renderDashboard();
+  renderContactsDay();
+  renderClients();
+  renderRanking();
+
+  setTimeout(() => {
+    document.getElementById('loadingOverlay').classList.add('hidden');
+  }, 600);
 });
 
 // ---- STORAGE ----
+async function loadData() {
+  loadFromStorage(); // load local first so app is never blank
+  if (SHEETS_URL) {
+    try {
+      const res = await fetch(SHEETS_URL + '?action=load', { method: 'GET' });
+      const json = await res.json();
+      if (json.status === 'ok' && Array.isArray(json.clients) && json.clients.length > 0) {
+        clients = json.clients;
+        localStorage.setItem('crm_clients', JSON.stringify(clients));
+      }
+    } catch (e) {
+      // Sheets offline, local data already loaded — silently continue
+    }
+  }
+}
+
 function loadFromStorage() {
   try {
     clients = JSON.parse(localStorage.getItem('crm_clients') || '[]');
