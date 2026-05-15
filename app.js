@@ -48,18 +48,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // ---- STORAGE ----
 async function loadData() {
-  loadFromStorage(); // load local first so app is never blank
   if (SHEETS_URL) {
+    // Se tem Sheets configurado, SEMPRE busca de lá primeiro
+    document.querySelector('.loading-content p').textContent = '🔄 Sincronizando com Google Sheets...';
     try {
-      const res = await fetch(SHEETS_URL + '?action=load', { method: 'GET' });
+      const res = await fetch(SHEETS_URL, { method: 'GET' });
       const json = await res.json();
-      if (json.status === 'ok' && Array.isArray(json.clients) && json.clients.length > 0) {
+      if (json.status === 'ok' && Array.isArray(json.clients)) {
         clients = json.clients;
         localStorage.setItem('crm_clients', JSON.stringify(clients));
+        return; // sucesso, não precisa do local
       }
     } catch (e) {
-      // Sheets offline, local data already loaded — silently continue
+      // Sheets falhou, usa local como fallback
+      loadFromStorage();
     }
+  } else {
+    // Sem Sheets, usa localStorage
+    loadFromStorage();
   }
 }
 
@@ -172,9 +178,9 @@ function toggleSidebar() {
 // ---- DASHBOARD ----
 function renderDashboard() {
   const total = clients.length;
-  const contactedToday = clients.filter(c => c.lastContact === today()).length;
+  const contactedToday = clients.filter(c => normalizeDate(c.lastContact) === today()).length;
   const thisMonth = new Date().toISOString().slice(0, 7);
-  const boughtMonth = clients.filter(c => c.lastPurchase && c.lastPurchase.startsWith(thisMonth)).length;
+  const boughtMonth = clients.filter(c => c.lastPurchase && normalizeDate(c.lastPurchase) && normalizeDate(c.lastPurchase).startsWith(thisMonth)).length;
 
   document.getElementById('kpiTotal').textContent = total;
   document.getElementById('kpiToday').textContent = contactedToday;
@@ -196,6 +202,12 @@ function renderDashboard() {
   } else {
     alertStrip.style.display = 'none';
   }
+}
+
+function filterByKpi(type) {
+  navigate("clients");
+  document.getElementById("filterTemp").value = type;
+  renderClients();
 }
 
 function filterByTemp(temp) {
@@ -237,7 +249,9 @@ function renderClients() {
       filter === 'hot' ? temp === 'hot' :
       filter === 'warm' ? temp === 'warm' :
       filter === 'cold' ? temp === 'cold' :
-      filter === 'nocontact' ? days > 15 : true;
+      filter === 'nocontact' ? days > 15 :
+      filter === 'today' ? normalizeDate(c.lastContact) === today() :
+      filter === 'month' ? (c.lastPurchase && normalizeDate(c.lastPurchase) && normalizeDate(c.lastPurchase).startsWith(new Date().toISOString().slice(0,7))) : true;
 
     return matchSearch && matchFilter;
   });
