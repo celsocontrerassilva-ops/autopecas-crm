@@ -88,33 +88,44 @@ async function syncToSheets() {
 
 // ---- HELPERS ----
 function today() {
-  return new Date().toISOString().split('T')[0];
+  return new Date().toISOString().split("T")[0];
+}
+
+function normalizeDate(dateStr) {
+  if (!dateStr) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+  if (dateStr.toString().includes("T")) return dateStr.toString().split("T")[0];
+  return dateStr.toString();
 }
 
 function daysSince(dateStr) {
   if (!dateStr) return 9999;
-  const diff = new Date() - new Date(dateStr);
+  const normalized = normalizeDate(dateStr);
+  const start = new Date(normalized + "T12:00:00");
+  const diff = new Date() - start;
   return Math.floor(diff / (1000 * 60 * 60 * 24));
 }
 
 function getTemp(client) {
   const days = daysSince(client.lastContact);
-  if (days <= 7) return 'hot';
-  if (days <= 15) return 'warm';
-  return 'cold';
+  if (days <= 7) return "hot";
+  if (days <= 15) return "warm";
+  return "cold";
 }
 
 function getTempBadge(client) {
   const t = getTemp(client);
   if (!client.lastContact) return '<span class="temp-badge badge-new">🆕 Novo</span>';
-  if (t === 'hot') return '<span class="temp-badge badge-hot">🔥 Quente</span>';
-  if (t === 'warm') return '<span class="temp-badge badge-warm">🌤️ Morno</span>';
+  if (t === "hot") return '<span class="temp-badge badge-hot">🔥 Quente</span>';
+  if (t === "warm") return '<span class="temp-badge badge-warm">🌤️ Morno</span>';
   return '<span class="temp-badge badge-cold">🧊 Frio</span>';
 }
 
 function formatDate(d) {
-  if (!d) return '—';
-  const [y, m, day] = d.split('-');
+  if (!d) return "—";
+  const normalized = normalizeDate(d);
+  if (!normalized) return "—";
+  const [y, m, day] = normalized.split("-");
   return `${day}/${m}/${y}`;
 }
 
