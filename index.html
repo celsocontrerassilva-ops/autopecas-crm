@@ -144,25 +144,25 @@
 
     <!-- KPI CARDS -->
     <div class="kpi-grid">
-      <div class="kpi-card">
+      <div class="kpi-card" onclick="filterByKpi('all')" style="cursor:pointer">
         <div class="kpi-icon">👥</div>
         <div class="kpi-data">
           <span class="kpi-value" id="kpiTotal">0</span>
           <span class="kpi-label">Total de Clientes</span>
         </div>
       </div>
-      <div class="kpi-card">
+      <div class="kpi-card" onclick="filterByKpi('today')" style="cursor:pointer">
         <div class="kpi-icon">📞</div>
         <div class="kpi-data">
           <span class="kpi-value" id="kpiToday">0</span>
-          <span class="kpi-label">Contatados Hoje</span>
+          <span class="kpi-label">Contatados Hoje ▶</span>
         </div>
       </div>
-      <div class="kpi-card">
+      <div class="kpi-card" onclick="filterByKpi('month')" style="cursor:pointer">
         <div class="kpi-icon">🛒</div>
         <div class="kpi-data">
           <span class="kpi-value" id="kpiMonth">0</span>
-          <span class="kpi-label">Compraram no Mês</span>
+          <span class="kpi-label">Compraram no Mês ▶</span>
         </div>
       </div>
     </div>
