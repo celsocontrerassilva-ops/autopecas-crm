@@ -204,9 +204,12 @@
 
   <!-- CONTACTS DAY PAGE -->
   <section id="page-contacts-day" class="page">
-    <div class="page-header">
-      <h1>🎯 Contatos do Dia</h1>
-      <p class="page-subtitle">15 clientes sugeridos para você contatar hoje</p>
+    <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:0.5rem">
+      <div>
+        <h1>🎯 Contatos do Dia</h1>
+        <p class="page-subtitle">30 clientes sugeridos para você contatar hoje</p>
+      </div>
+      <button class="btn btn-outline" onclick="resetDailyList()" style="font-size:0.78rem;margin-top:0.25rem">🔄 Nova Lista</button>
     </div>
     <div id="contactsDayList" class="clients-list"></div>
   </section>
