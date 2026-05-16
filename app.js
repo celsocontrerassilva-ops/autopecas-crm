@@ -757,6 +757,120 @@ function exportReport(period) {
   URL.revokeObjectURL(url);
 }
 
+// ---- WHATSAPP / EVOLUTION API ----
+const EVOLUTION_URL = 'https://evolution-api-production-da04e.up.railway.app';
+const EVOLUTION_KEY = '8c862d27ead59faf3be57be501113debeb6c41a4ed87488d5e110ab7c93f38b4';
+const EVOLUTION_INSTANCE = 'autopecas';
+
+let qrCheckInterval = null;
+
+async function openQRModal() {
+  document.getElementById('qrModal').style.display = 'flex';
+  document.getElementById('qrConnected').style.display = 'none';
+  await generateQR();
+}
+
+function closeQRModal() {
+  document.getElementById('qrModal').style.display = 'none';
+  if (qrCheckInterval) { clearInterval(qrCheckInterval); qrCheckInterval = null; }
+}
+
+async function generateQR() {
+  document.getElementById('qrStatus').textContent = '⏳ Gerando QR Code...';
+  document.getElementById('qrCodeImg').innerHTML = '<span style="color:#666">⏳ Aguardando...</span>';
+  
+  try {
+    // Tenta criar instância se não existir
+    await fetch(`${EVOLUTION_URL}/instance/create`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': EVOLUTION_KEY },
+      body: JSON.stringify({ instanceName: EVOLUTION_INSTANCE, qrcode: true })
+    });
+  } catch(e) {}
+
+  await refreshQR();
+}
+
+async function refreshQR() {
+  document.getElementById('qrStatus').textContent = '🔄 Buscando QR Code...';
+  try {
+    const res = await fetch(`${EVOLUTION_URL}/instance/connect/${EVOLUTION_INSTANCE}`, {
+      headers: { 'apikey': EVOLUTION_KEY }
+    });
+    const data = await res.json();
+
+    if (data.base64) {
+      document.getElementById('qrCodeImg').innerHTML = `<img src="${data.base64}" style="width:220px;height:220px;border-radius:8px" />`;
+      document.getElementById('qrStatus').textContent = '📱 Escaneie o QR Code com seu WhatsApp Business';
+      
+      // Fica verificando se conectou
+      if (qrCheckInterval) clearInterval(qrCheckInterval);
+      qrCheckInterval = setInterval(checkConnection, 5000);
+    } else if (data.instance?.state === 'open') {
+      showConnected();
+    } else {
+      document.getElementById('qrStatus').textContent = '⚠️ Não foi possível gerar o QR. Tente novamente.';
+    }
+  } catch(e) {
+    document.getElementById('qrStatus').textContent = '❌ Erro ao conectar com a API. Verifique sua conexão.';
+  }
+}
+
+async function checkConnection() {
+  try {
+    const res = await fetch(`${EVOLUTION_URL}/instance/fetchInstances`, {
+      headers: { 'apikey': EVOLUTION_KEY }
+    });
+    const data = await res.json();
+    const instance = data.find ? data.find(i => i.instance?.instanceName === EVOLUTION_INSTANCE) : null;
+    if (instance?.instance?.state === 'open') {
+      showConnected();
+    }
+  } catch(e) {}
+}
+
+function showConnected() {
+  if (qrCheckInterval) { clearInterval(qrCheckInterval); qrCheckInterval = null; }
+  document.getElementById('qrCodeImg').innerHTML = '✅';
+  document.getElementById('qrStatus').textContent = '';
+  document.getElementById('qrConnected').style.display = 'block';
+  document.getElementById('whatsappStatus').innerHTML = '<span style="color:var(--success)">✅ WhatsApp conectado!</span>';
+  showToast('✅ WhatsApp conectado com sucesso!');
+}
+
+async function checkWhatsAppStatus() {
+  const statusEl = document.getElementById('whatsappStatus');
+  statusEl.innerHTML = '<span style="color:var(--text2)">🔍 Verificando...</span>';
+  try {
+    const res = await fetch(`${EVOLUTION_URL}/instance/fetchInstances`, {
+      headers: { 'apikey': EVOLUTION_KEY }
+    });
+    const data = await res.json();
+    const instance = Array.isArray(data) ? data.find(i => i.instance?.instanceName === EVOLUTION_INSTANCE) : null;
+    if (instance?.instance?.state === 'open') {
+      statusEl.innerHTML = '<span style="color:var(--success)">✅ WhatsApp conectado!</span>';
+    } else {
+      statusEl.innerHTML = '<span style="color:var(--hot)">❌ WhatsApp desconectado</span>';
+    }
+  } catch(e) {
+    statusEl.innerHTML = '<span style="color:var(--hot)">❌ Erro ao verificar status</span>';
+  }
+}
+
+async function disconnectWhatsApp() {
+  if (!confirm('Deseja desconectar o WhatsApp?')) return;
+  try {
+    await fetch(`${EVOLUTION_URL}/instance/logout/${EVOLUTION_INSTANCE}`, {
+      method: 'DELETE',
+      headers: { 'apikey': EVOLUTION_KEY }
+    });
+    document.getElementById('whatsappStatus').innerHTML = '<span style="color:var(--hot)">❌ WhatsApp desconectado</span>';
+    showToast('WhatsApp desconectado!');
+  } catch(e) {
+    showToast('Erro ao desconectar', 'error');
+  }
+}
+
 // ---- CONFIG ----
 function saveConfig() {
   SHEETS_URL = document.getElementById('sheetsUrl').value.trim();
