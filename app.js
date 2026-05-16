@@ -757,6 +757,159 @@ function exportReport(period) {
   URL.revokeObjectURL(url);
 }
 
+// ---- WHATSAPP DISPATCH ----
+let dispatchRunning = false;
+let dispatchTimeout = null;
+let dispatchQueue = [];
+let dispatchIndex = 0;
+
+function getDispatchList() {
+  const todayStr = today();
+  const dailyIds = getDailyList();
+  return dailyIds
+    .map(id => clients.find(c => c.id === id))
+    .filter(c => c && normalizeDate(c.lastContact) !== todayStr);
+}
+
+function previewDispatch() {
+  const list = getDispatchList();
+  const withWpp = list.filter(c => c.whatsapp);
+  const withoutWpp = list.filter(c => !c.whatsapp);
+
+  // Mostra alerta dos sem WhatsApp
+  const alertEl = document.getElementById('noWhatsappAlert');
+  const listEl = document.getElementById('noWhatsappList');
+
+  if (withoutWpp.length > 0) {
+    alertEl.style.display = 'block';
+    listEl.innerHTML = withoutWpp.map(c => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:0.4rem 0;border-bottom:1px solid rgba(239,68,68,0.2);font-size:0.83rem">
+        <span style="color:var(--text)">${c.empresa}</span>
+        <button class="btn btn-outline" style="font-size:0.72rem;padding:0.25rem 0.5rem" onclick="openEditModal('${c.id}')">✏️ Corrigir</button>
+      </div>
+    `).join('');
+  } else {
+    alertEl.style.display = 'none';
+  }
+
+  document.getElementById('dispatchStatus').textContent = `✅ ${withWpp.length} prontos para enviar · ⚠️ ${withoutWpp.length} sem WhatsApp`;
+  navigate('config');
+  showToast(`📋 ${withWpp.length} clientes prontos, ${withoutWpp.length} sem WhatsApp`);
+}
+
+async function startDispatch() {
+  if (dispatchRunning) return;
+
+  const list = getDispatchList().filter(c => c.whatsapp);
+  const withoutWpp = getDispatchList().filter(c => !c.whatsapp);
+
+  if (list.length === 0) {
+    showToast('⚠️ Nenhum cliente com WhatsApp para enviar!', 'error');
+    return;
+  }
+
+  // Mostra aviso dos sem WhatsApp
+  if (withoutWpp.length > 0) {
+    const alertEl = document.getElementById('noWhatsappAlert');
+    const listEl = document.getElementById('noWhatsappList');
+    alertEl.style.display = 'block';
+    listEl.innerHTML = withoutWpp.map(c => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:0.4rem 0;border-bottom:1px solid rgba(239,68,68,0.2);font-size:0.83rem">
+        <span style="color:var(--text)">${c.empresa}</span>
+        <button class="btn btn-outline" style="font-size:0.72rem;padding:0.25rem 0.5rem" onclick="openEditModal('${c.id}')">✏️ Corrigir</button>
+      </div>
+    `).join('');
+  }
+
+  dispatchRunning = true;
+  dispatchQueue = list;
+  dispatchIndex = 0;
+
+  document.getElementById('startDispatchBtn').style.display = 'none';
+  document.getElementById('stopDispatchBtn').style.display = 'inline-flex';
+  document.getElementById('dispatchProgress').style.display = 'block';
+
+  await sendNextMessage();
+}
+
+async function sendNextMessage() {
+  if (!dispatchRunning || dispatchIndex >= dispatchQueue.length) {
+    finishDispatch();
+    return;
+  }
+
+  const c = dispatchQueue[dispatchIndex];
+  const total = dispatchQueue.length;
+  const current = dispatchIndex + 1;
+
+  // Atualiza progresso
+  document.getElementById('progressLabel').textContent = `Enviando para ${c.empresa}...`;
+  document.getElementById('progressCount').textContent = `${current}/${total}`;
+  document.getElementById('progressBar').style.width = `${(current/total)*100}%`;
+  document.getElementById('dispatchStatus').textContent = `📤 Enviando ${current}/${total} — ${c.empresa}`;
+
+  // Monta mensagem
+  const hora = new Date().getHours();
+  const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
+  const msgs = [
+    `${saudacao}! Aqui é da AutoPeças, tudo bem? 😊 Vim verificar se vocês precisam de alguma peça ou produto esta semana. Temos novidades chegando e queria te apresentar antes de qualquer um! O que está precisando?`,
+    `${saudacao}! Passando para dar um alô e saber como estão as coisas por aí! 🔧 Alguma peça precisando? Estamos com ótimas condições esta semana para clientes especiais como vocês!`,
+    `${saudacao}! Tudo certo por aí? 😊 Vim dar um alô e verificar se precisam repor estoque de alguma peça. Temos condições especiais esta semana — me fala o que está precisando que te passo o melhor preço!`,
+  ];
+  const msg = msgs[Math.floor(Math.random() * msgs.length)];
+  const clean = c.whatsapp.replace(/\D/g, '');
+
+  // Envia via Evolution API
+  try {
+    await fetch(`${EVOLUTION_URL}/message/sendText/${EVOLUTION_INSTANCE}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': EVOLUTION_KEY },
+      body: JSON.stringify({ number: clean, text: msg })
+    });
+
+    // Marca como contatado
+    c.lastContact = today();
+    if (!c.history) c.history = [];
+    c.history.unshift({ type: 'contact', date: today(), label: 'Mensagem automática enviada' });
+    saveToStorage();
+    showToast(`✅ Mensagem enviada para ${c.empresa}`);
+
+  } catch(e) {
+    showToast(`⚠️ Erro ao enviar para ${c.empresa}`, 'error');
+  }
+
+  dispatchIndex++;
+
+  if (dispatchIndex < dispatchQueue.length) {
+    const interval = (parseInt(document.getElementById('msgInterval')?.value) || 8) * 60 * 1000;
+    document.getElementById('dispatchStatus').textContent = `⏳ Aguardando ${document.getElementById('msgInterval')?.value || 8} min para próxima mensagem...`;
+    dispatchTimeout = setTimeout(sendNextMessage, interval);
+  } else {
+    finishDispatch();
+  }
+}
+
+function stopDispatch() {
+  dispatchRunning = false;
+  if (dispatchTimeout) { clearTimeout(dispatchTimeout); dispatchTimeout = null; }
+  document.getElementById('startDispatchBtn').style.display = 'inline-flex';
+  document.getElementById('stopDispatchBtn').style.display = 'none';
+  document.getElementById('dispatchStatus').textContent = `⏸️ Pausado em ${dispatchIndex}/${dispatchQueue.length}`;
+  showToast('⏸️ Disparo pausado!');
+}
+
+function finishDispatch() {
+  dispatchRunning = false;
+  document.getElementById('startDispatchBtn').style.display = 'inline-flex';
+  document.getElementById('stopDispatchBtn').style.display = 'none';
+  document.getElementById('progressLabel').textContent = '✅ Todos enviados!';
+  document.getElementById('progressBar').style.width = '100%';
+  document.getElementById('dispatchStatus').textContent = `✅ Disparo concluído! ${dispatchQueue.length} mensagens enviadas.`;
+  showToast(`🎉 Disparo concluído! ${dispatchQueue.length} mensagens enviadas!`);
+  renderDashboard();
+  renderContactsDay();
+}
+
 // ---- WHATSAPP / EVOLUTION API ----
 const EVOLUTION_URL = 'https://evolution-api-production-da04e.up.railway.app';
 const EVOLUTION_KEY = '8c862d27ead59faf3be57be501113debeb6c41a4ed87488d5e110ab7c93f38b4';
