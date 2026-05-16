@@ -230,6 +230,13 @@ function filterByTemp(temp) {
 }
 
 // ---- CONTACTS DAY ----
+function resetDailyList() {
+  const todayStr = today();
+  localStorage.removeItem('daily_list_' + todayStr);
+  renderContactsDay();
+  showToast('🔄 Nova lista gerada!');
+}
+
 function getDailyList() {
   const todayStr = today();
   const storageKey = 'daily_list_' + todayStr;
