@@ -120,3 +120,28 @@ Use o link do GitHub Pages. Ele funciona em qualquer celular ou computador com i
 ---
 
 Desenvolvido com ❤️ para gestão de clientes B2B
+
+
+🔐 Dados de Acesso — Evolution API
+
+🌐 URL da API:
+
+index.js
+
+javascript
+
+https://evolution-api-production-6a0c.up.railway.app
+🖥️ Painel Manager:
+
+index.js
+
+javascript
+
+https://evolution-api-production-6a0c.up.railway.app/manager
+🔑 API Key:
+
+index.js
+
+javascript
+
+autopecas123456
