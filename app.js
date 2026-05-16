@@ -230,18 +230,55 @@ function filterByTemp(temp) {
 }
 
 // ---- CONTACTS DAY ----
+function getDailyList() {
+  const todayStr = today();
+  const storageKey = 'daily_list_' + todayStr;
+  
+  // Verifica se já tem lista gerada hoje
+  let dailyIds = [];
+  try {
+    const stored = JSON.parse(localStorage.getItem(storageKey) || '[]');
+    if (stored.length > 0) dailyIds = stored;
+  } catch {}
+
+  // Se não tem lista hoje, gera uma nova
+  if (dailyIds.length === 0) {
+    const cold = clients.filter(c => getTemp(c) === 'cold');
+    const warm = clients.filter(c => getTemp(c) === 'warm');
+    const hot = clients.filter(c => getTemp(c) === 'hot');
+    const pool = [...cold, ...warm, ...hot].slice(0, 30);
+    dailyIds = pool.map(c => c.id);
+    localStorage.setItem(storageKey, JSON.stringify(dailyIds));
+  }
+
+  return dailyIds;
+}
+
 function renderContactsDay() {
-  const cold = clients.filter(c => getTemp(c) === 'cold');
-  const warm = clients.filter(c => getTemp(c) === 'warm');
-  const hot = clients.filter(c => getTemp(c) === 'hot');
-  const suggested = [...cold, ...warm, ...hot].slice(0, 15);
+  const todayStr = today();
+  const dailyIds = getDailyList();
+
+  // Filtra: está na lista do dia E não foi contatado hoje
+  const suggested = dailyIds
+    .map(id => clients.find(c => c.id === id))
+    .filter(c => c && normalizeDate(c.lastContact) !== todayStr);
 
   const container = document.getElementById('contactsDayList');
+
   if (suggested.length === 0) {
-    container.innerHTML = '<div class="empty-state"><p>Nenhum cliente cadastrado ainda 😕</p></div>';
+    container.innerHTML = '<div class="empty-state"><p>🎉 Todos os contatos do dia foram realizados!</p></div>';
     return;
   }
-  container.innerHTML = suggested.map(c => renderClientCard(c, true)).join('');
+
+  // Mostra contador
+  const total = getDailyList().length;
+  const done = total - suggested.length;
+  container.innerHTML = `
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:0.75rem 1.25rem;margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between">
+      <span>📋 Progresso do dia</span>
+      <strong style="color:var(--accent)">${done}/${total} contatados</strong>
+    </div>
+  ` + suggested.map(c => renderClientCard(c, true)).join('');
 }
 
 // ---- CLIENTS LIST ----
@@ -362,7 +399,17 @@ function saveObs(id, value) {
 
 function openWhatsApp(number, name) {
   const clean = number.replace(/\D/g, '');
-  const msg = encodeURIComponent(`Olá! Tudo bem? Passando para verificar se precisam de algo.`);
+  const hora = new Date().getHours();
+  const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
+  
+  const msgs = [
+    `${saudacao}! Aqui é da AutoPeças, tudo bem? 😊 Vim verificar se vocês precisam de alguma peça ou produto desta semana. Temos novidades chegando e queria te apresentar antes de qualquer um! O que está precisando?`,
+    `${saudacao}! Passando para dar um alô e saber como estão as coisas por aí! 🔧 Alguma peça precisando? Estamos com ótimas condições esta semana para clientes especiais como vocês!`,
+    `${saudacao}! Tudo certo por aí? 😊 Vim dar um alô e verificar se precisam repor estoque de alguma peça. Temos condições especiais esta semana — me fala o que está precisando que te passo o melhor preço!`,
+  ];
+  
+  // Sorteia uma mensagem diferente cada vez
+  const msg = encodeURIComponent(msgs[Math.floor(Math.random() * msgs.length)]);
   window.open(`https://wa.me/${clean}?text=${msg}`, '_blank');
 }
 
@@ -590,6 +637,117 @@ function confirmImport() {
   renderClients();
   renderContactsDay();
   showToast(`📥 ${importBuffer.length} clientes importados com sucesso!`);
+}
+
+// ---- RELATÓRIO ----
+function openReport() {
+  const modal = document.getElementById('reportModal');
+  modal.style.display = 'flex';
+  generateReport('today');
+}
+
+function generateReport(period) {
+  const todayStr = today();
+  const now = new Date();
+  
+  // Define período
+  let startDate, periodLabel;
+  if (period === 'today') {
+    startDate = todayStr;
+    periodLabel = 'Hoje — ' + new Date().toLocaleDateString('pt-BR');
+  } else if (period === 'week') {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    startDate = d.toISOString().split('T')[0];
+    periodLabel = 'Últimos 7 dias';
+  } else {
+    startDate = now.toISOString().slice(0, 7);
+    periodLabel = 'Este mês';
+  }
+
+  // Filtra contatos e compras no período
+  const contacted = clients.filter(c => {
+    const d = normalizeDate(c.lastContact);
+    return d && d >= startDate;
+  });
+
+  const purchased = clients.filter(c => {
+    const d = normalizeDate(c.lastPurchase);
+    return d && d >= startDate;
+  });
+
+  // Histórico detalhado do período
+  const allActions = [];
+  clients.forEach(c => {
+    (c.history || []).forEach(h => {
+      if (normalizeDate(h.date) >= startDate) {
+        allActions.push({ ...h, empresa: c.empresa, whatsapp: c.whatsapp });
+      }
+    });
+  });
+  allActions.sort((a, b) => b.date > a.date ? 1 : -1);
+
+  const content = document.getElementById('reportContent');
+  content.innerHTML = `
+    <div style="display:flex;gap:0.5rem;margin-bottom:1.5rem;flex-wrap:wrap">
+      <button class="btn ${period==='today'?'btn-primary':'btn-secondary'}" onclick="generateReport('today')">Hoje</button>
+      <button class="btn ${period==='week'?'btn-primary':'btn-secondary'}" onclick="generateReport('week')">7 dias</button>
+      <button class="btn ${period==='month'?'btn-primary':'btn-secondary'}" onclick="generateReport('month')">Este mês</button>
+    </div>
+    <h4 style="color:var(--text2);margin-bottom:1rem">📅 ${periodLabel}</h4>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem">
+      <div style="background:var(--bg3);border-radius:8px;padding:1rem;text-align:center">
+        <div style="font-size:2rem;font-weight:700;color:var(--accent)">${contacted.length}</div>
+        <div style="font-size:0.82rem;color:var(--text2)">📞 Clientes Contatados</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:8px;padding:1rem;text-align:center">
+        <div style="font-size:2rem;font-weight:700;color:#22c55e">${purchased.length}</div>
+        <div style="font-size:0.82rem;color:var(--text2)">🛒 Clientes que Compraram</div>
+      </div>
+    </div>
+    <h4 style="margin-bottom:0.75rem;font-size:0.9rem;color:var(--text2)">📋 ATIVIDADES DO PERÍODO</h4>
+    <div style="max-height:300px;overflow-y:auto">
+      ${allActions.length === 0 
+        ? '<p style="color:var(--text2);text-align:center;padding:1rem">Nenhuma atividade no período.</p>'
+        : allActions.map(a => `
+          <div style="display:flex;align-items:center;gap:0.75rem;padding:0.6rem 0;border-bottom:1px solid var(--border);font-size:0.85rem">
+            <span>${a.type === 'purchase' ? '🛒' : '📞'}</span>
+            <span style="flex:1"><strong>${a.empresa}</strong> — ${a.label}</span>
+            <span style="color:var(--text2);font-size:0.78rem">${formatDate(a.date)}</span>
+          </div>`).join('')
+      }
+    </div>
+    <div style="margin-top:1.25rem;text-align:right">
+      <button class="btn btn-outline" onclick="exportReport('${period}')">📤 Exportar CSV</button>
+    </div>
+  `;
+}
+
+function exportReport(period) {
+  const todayStr = today();
+  const now = new Date();
+  let startDate;
+  if (period === 'today') startDate = todayStr;
+  else if (period === 'week') { const d = new Date(); d.setDate(d.getDate()-7); startDate = d.toISOString().split('T')[0]; }
+  else startDate = now.toISOString().slice(0,7);
+
+  const rows = [['Empresa','Tipo','Data','Observação']];
+  clients.forEach(c => {
+    (c.history || []).forEach(h => {
+      if (normalizeDate(h.date) >= startDate) {
+        rows.push([c.empresa, h.type === 'purchase' ? 'Compra' : 'Contato', formatDate(h.date), c.obs || '']);
+      }
+    });
+  });
+
+  const csv = rows.map(r => r.join(';')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `relatorio-${period}-${todayStr}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ---- CONFIG ----
