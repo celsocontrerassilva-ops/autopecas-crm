@@ -40,6 +40,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderContactsDay();
   renderClients();
   renderRanking();
+  checkWppSidebarStatus();
 
   setTimeout(() => {
     document.getElementById('loadingOverlay').classList.add('hidden');
@@ -153,6 +154,29 @@ function showToast(msg, type = 'success') {
   setTimeout(() => t.classList.remove('show'), 3000);
 }
 
+// ---- WHATSAPP SIDEBAR STATUS ----
+async function checkWppSidebarStatus() {
+  const el = document.getElementById('wppSidebarStatus');
+  if (!el) return;
+  try {
+    const res = await fetch(`${EVOLUTION_URL}/instance/fetchInstances`, {
+      headers: { 'apikey': EVOLUTION_KEY }
+    });
+    const data = await res.json();
+    const instance = Array.isArray(data) ? data.find(i => i.instance?.instanceName === EVOLUTION_INSTANCE) : null;
+    if (instance?.instance?.state === 'open') {
+      el.innerHTML = '🟢 WhatsApp conectado';
+      el.style.color = '#22c55e';
+    } else {
+      el.innerHTML = '🔴 WhatsApp desconectado';
+      el.style.color = '#ef4444';
+    }
+  } catch(e) {
+    el.innerHTML = '🔴 WhatsApp desconectado';
+    el.style.color = '#ef4444';
+  }
+}
+
 // ---- SYNC NOW ----
 async function syncNow() {
   const btn = document.getElementById('syncBtn');
@@ -204,14 +228,22 @@ function renderDashboard() {
   const cold = clients.filter(c => getTemp(c) === 'cold').length;
 
   document.getElementById('hotCount').textContent = hot;
+
+  // Termômetro de compras
+  const buyHot = clients.filter(c => daysSince(c.lastPurchase) <= 7).length;
+  const buyWarm = clients.filter(c => { const d = daysSince(c.lastPurchase); return d > 7 && d <= 30; }).length;
+  const buyCold = clients.filter(c => daysSince(c.lastPurchase) > 30).length;
+  if (document.getElementById('buyHotCount')) document.getElementById('buyHotCount').textContent = buyHot;
+  if (document.getElementById('buyWarmCount')) document.getElementById('buyWarmCount').textContent = buyWarm;
+  if (document.getElementById('buyColdCount')) document.getElementById('buyColdCount').textContent = buyCold;
   document.getElementById('warmCount').textContent = warm;
   document.getElementById('coldCount').textContent = cold;
 
-  const noContact15 = clients.filter(c => daysSince(c.lastContact) > 15).length;
+  const noContact15 = clients.filter(c => daysSince(c.lastContact) > 10).length;
   const alertStrip = document.getElementById('alertStrip');
   if (noContact15 > 0) {
     alertStrip.style.display = 'block';
-    document.getElementById('alertStripText').textContent = `${noContact15} cliente(s) sem contato há mais de 15 dias!`;
+    document.getElementById('alertStripText').textContent = `${noContact15} cliente(s) sem contato há mais de 10 dias!`;
   } else {
     alertStrip.style.display = 'none';
   }
@@ -220,6 +252,12 @@ function renderDashboard() {
 function filterByKpi(type) {
   navigate("clients");
   document.getElementById("filterTemp").value = type;
+  renderClients();
+}
+
+function filterByPurchase(type) {
+  navigate('clients');
+  document.getElementById('filterTemp').value = 'purchase_' + type;
   renderClients();
 }
 
@@ -306,9 +344,12 @@ function renderClients() {
       filter === 'hot' ? temp === 'hot' :
       filter === 'warm' ? temp === 'warm' :
       filter === 'cold' ? temp === 'cold' :
-      filter === 'nocontact' ? days > 15 :
+      filter === 'nocontact' ? days > 10 :
       filter === 'today' ? normalizeDate(c.lastContact) === today() :
-      filter === 'month' ? (c.lastPurchase && normalizeDate(c.lastPurchase) && normalizeDate(c.lastPurchase).startsWith(new Date().toISOString().slice(0,7))) : true;
+      filter === 'month' ? (c.lastPurchase && normalizeDate(c.lastPurchase) && normalizeDate(c.lastPurchase).startsWith(new Date().toISOString().slice(0,7))) :
+      filter === 'purchase_recent' ? daysSince(c.lastPurchase) <= 7 :
+      filter === 'purchase_medium' ? (daysSince(c.lastPurchase) > 7 && daysSince(c.lastPurchase) <= 30) :
+      filter === 'purchase_old' ? daysSince(c.lastPurchase) > 30 : true;
 
     return matchSearch && matchFilter;
   });
@@ -389,6 +430,9 @@ function markPurchased(id) {
   c.purchaseCount = (c.purchaseCount || 0) + 1;
   if (!c.history) c.history = [];
   c.history.unshift({ type: 'purchase', date: t, label: 'Compra realizada' });
+  // Adiciona nas observações
+  const obsLine = `🛒 Compra registrada em ${formatDate(t)}`;
+  c.obs = c.obs ? c.obs + '\n' + obsLine : obsLine;
   saveToStorage();
   renderDashboard();
   renderContactsDay();
@@ -410,9 +454,12 @@ function openWhatsApp(number, name) {
   const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
   
   const msgs = [
-    `${saudacao}! Aqui é da AutoPeças, tudo bem? 😊 Vim verificar se vocês precisam de alguma peça ou produto desta semana. Temos novidades chegando e queria te apresentar antes de qualquer um! O que está precisando?`,
-    `${saudacao}! Passando para dar um alô e saber como estão as coisas por aí! 🔧 Alguma peça precisando? Estamos com ótimas condições esta semana para clientes especiais como vocês!`,
-    `${saudacao}! Tudo certo por aí? 😊 Vim dar um alô e verificar se precisam repor estoque de alguma peça. Temos condições especiais esta semana — me fala o que está precisando que te passo o melhor preço!`,
+    `${saudacao}! Aqui é o Celso, da Toyota T-line 🔧 Tudo bem por aí? Passando pra saber se precisam de alguma peça essa semana. Tenho algumas novidades chegando e queria oferecer pra vocês antes! Me fala o que está precisando 😊`,
+    `${saudacao}! Celso aqui da Toyota T-line, tudo certo? 😄 Vim dar um alô e ver se está precisando de algo — filtros, freios, suspensão... qualquer coisa que precisar tô aqui! O que está faltando?`,
+    `${saudacao}! É o Celso da T-line 👋 Estava pensando em vocês aqui — faz um tempo que não conversamos! Tem alguma peça precisando ou estoque pra repor? Essa semana estou com condições bem interessantes pra clientes antigos 😊`,
+    `${saudacao}! Celso da Toyota T-line por aqui 🔧 Só passando pra checar se está tudo certo com o estoque de vocês. Às vezes aparece aquela peça que some e a gente não lembra de pedir — me fala o que está precisando que eu resolvo!`,
+    `${saudacao}! Aqui é o Celso da T-line 😊 Vim dar um alô rápido — tem alguma novidade aí na oficina? Alguma peça que está girando mais ou algo que está difícil de achar? Me conta que vejo o que posso fazer por vocês!`,
+    `${saudacao}! É o Celso aqui, da Toyota T-line 👋 Passando pra não sumir! rsrs Alguma peça precisando essa semana? Estou com alguns itens em promoção e pensei em vocês. Me fala o que precisar 😊`,
   ];
   
   // Sorteia uma mensagem diferente cada vez
@@ -468,7 +515,7 @@ function renderRanking() {
 function openClientModal() {
   editingClientId = null;
   document.getElementById('clientModalTitle').textContent = '📇 Novo Cliente';
-  ['f_empresa','f_cnpj','f_contato','f_telefone','f_email','f_whatsapp','f_obs'].forEach(id => {
+  ['f_empresa','f_cnpj','f_contato','f_telefone','f_email','f_whatsapp','f_endereco','f_obs'].forEach(id => {
     document.getElementById(id).value = '';
   });
   document.getElementById('clientModal').style.display = 'flex';
@@ -485,6 +532,7 @@ function openEditModal(id) {
   document.getElementById('f_telefone').value = c.telefone || '';
   document.getElementById('f_email').value = c.email || '';
   document.getElementById('f_whatsapp').value = c.whatsapp || '';
+  document.getElementById('f_endereco').value = c.endereco || '';
   document.getElementById('f_obs').value = c.obs || '';
   document.getElementById('clientModal').style.display = 'flex';
 }
@@ -505,6 +553,7 @@ function saveClient() {
     c.telefone = document.getElementById('f_telefone').value.trim();
     c.email = document.getElementById('f_email').value.trim();
     c.whatsapp = document.getElementById('f_whatsapp').value.trim();
+    c.endereco = document.getElementById('f_endereco').value.trim();
     c.obs = document.getElementById('f_obs').value.trim();
     showToast(`✅ Cliente ${empresa} atualizado!`);
   } else {
@@ -516,6 +565,7 @@ function saveClient() {
       telefone: document.getElementById('f_telefone').value.trim(),
       email: document.getElementById('f_email').value.trim(),
       whatsapp: document.getElementById('f_whatsapp').value.trim(),
+      endereco: document.getElementById('f_endereco').value.trim(),
       obs: document.getElementById('f_obs').value.trim(),
       lastContact: null,
       lastPurchase: null,
@@ -644,6 +694,65 @@ function confirmImport() {
   renderClients();
   renderContactsDay();
   showToast(`📥 ${importBuffer.length} clientes importados com sucesso!`);
+}
+
+// ---- DUPLICATAS ----
+function checkDuplicates() {
+  const seen = {};
+  const dupes = [];
+
+  clients.forEach(c => {
+    const key = c.empresa.trim().toLowerCase();
+    if (seen[key]) {
+      dupes.push({ original: seen[key], duplicate: c });
+    } else {
+      seen[key] = c;
+    }
+  });
+
+  // Check by CNPJ too
+  const seenCnpj = {};
+  clients.forEach(c => {
+    if (!c.cnpj) return;
+    const key = c.cnpj.replace(/\D/g, '');
+    if (key.length < 11) return;
+    if (seenCnpj[key]) {
+      const already = dupes.find(d => d.duplicate.id === c.id || d.original.id === c.id);
+      if (!already) dupes.push({ original: seenCnpj[key], duplicate: c });
+    } else {
+      seenCnpj[key] = c;
+    }
+  });
+
+  const alertEl = document.getElementById('duplicatesAlert');
+
+  if (dupes.length === 0) {
+    alertEl.style.display = 'block';
+    alertEl.innerHTML = '<p style="color:var(--success)">✅ Nenhum cliente duplicado encontrado!</p>';
+    setTimeout(() => alertEl.style.display = 'none', 3000);
+    return;
+  }
+
+  alertEl.style.display = 'block';
+  alertEl.innerHTML = `
+    <p style="color:#fde68a;font-weight:600;margin-bottom:0.75rem">⚠️ ${dupes.length} possível(is) duplicata(s) encontrada(s):</p>
+    ${dupes.map(d => `
+      <div style="background:var(--bg3);border-radius:8px;padding:0.75rem;margin-bottom:0.5rem;font-size:0.83rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem">
+          <div>
+            <strong>${d.original.empresa}</strong> vs <strong>${d.duplicate.empresa}</strong>
+            ${d.original.cnpj ? `<br><small style="color:var(--text2)">CNPJ: ${d.original.cnpj}</small>` : ''}
+          </div>
+          <div style="display:flex;gap:0.5rem">
+            <button class="btn btn-outline" style="font-size:0.72rem" onclick="openEditModal('${d.original.id}')">✏️ Ver 1º</button>
+            <button class="btn btn-outline" style="font-size:0.72rem" onclick="openEditModal('${d.duplicate.id}')">✏️ Ver 2º</button>
+            <button class="btn btn-danger" style="font-size:0.72rem" onclick="openDeleteModal('${d.duplicate.id}')">🗑️ Excluir 2º</button>
+          </div>
+        </div>
+      </div>
+    `).join('')}
+    <button class="btn btn-outline" style="font-size:0.78rem;margin-top:0.5rem" onclick="document.getElementById('duplicatesAlert').style.display='none'">Fechar</button>
+  `;
 }
 
 // ---- RELATÓRIO ----
@@ -821,6 +930,7 @@ async function startDispatch() {
     `).join('');
   }
 
+  window.failedDispatch = [];
   dispatchRunning = true;
   dispatchQueue = list;
   dispatchIndex = 0;
@@ -852,9 +962,12 @@ async function sendNextMessage() {
   const hora = new Date().getHours();
   const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
   const msgs = [
-    `${saudacao}! Aqui é da AutoPeças, tudo bem? 😊 Vim verificar se vocês precisam de alguma peça ou produto esta semana. Temos novidades chegando e queria te apresentar antes de qualquer um! O que está precisando?`,
-    `${saudacao}! Passando para dar um alô e saber como estão as coisas por aí! 🔧 Alguma peça precisando? Estamos com ótimas condições esta semana para clientes especiais como vocês!`,
-    `${saudacao}! Tudo certo por aí? 😊 Vim dar um alô e verificar se precisam repor estoque de alguma peça. Temos condições especiais esta semana — me fala o que está precisando que te passo o melhor preço!`,
+    `${saudacao}! Aqui é o Celso, da Toyota T-line 🔧 Tudo bem por aí? Passando pra saber se precisam de alguma peça essa semana. Tenho algumas novidades chegando e queria oferecer pra vocês antes! Me fala o que está precisando 😊`,
+    `${saudacao}! Celso aqui da Toyota T-line, tudo certo? 😄 Vim dar um alô e ver se está precisando de algo — filtros, freios, suspensão... qualquer coisa que precisar tô aqui! O que está faltando?`,
+    `${saudacao}! É o Celso da T-line 👋 Estava pensando em vocês aqui — faz um tempo que não conversamos! Tem alguma peça precisando ou estoque pra repor? Essa semana estou com condições bem interessantes pra clientes antigos 😊`,
+    `${saudacao}! Celso da Toyota T-line por aqui 🔧 Só passando pra checar se está tudo certo com o estoque de vocês. Às vezes aparece aquela peça que some e a gente não lembra de pedir — me fala o que está precisando que eu resolvo!`,
+    `${saudacao}! Aqui é o Celso da T-line 😊 Vim dar um alô rápido — tem alguma novidade aí na oficina? Alguma peça que está girando mais ou algo que está difícil de achar? Me conta que vejo o que posso fazer por vocês!`,
+    `${saudacao}! É o Celso aqui, da Toyota T-line 👋 Passando pra não sumir! rsrs Alguma peça precisando essa semana? Estou com alguns itens em promoção e pensei em vocês. Me fala o que precisar 😊`,
   ];
   const msg = msgs[Math.floor(Math.random() * msgs.length)];
   const clean = c.whatsapp.replace(/\D/g, '');
@@ -875,22 +988,28 @@ async function sendNextMessage() {
     });
 
     const sendData = await sendRes.json();
-    console.log('Resposta envio:', sendData);
 
     if (sendRes.ok || sendData.key) {
       // Marca como contatado
       c.lastContact = today();
       if (!c.history) c.history = [];
       c.history.unshift({ type: 'contact', date: today(), label: 'Mensagem automática enviada' });
+      // Adiciona nas observações
+      const obsLine = `📤 Mensagem automática enviada em ${formatDate(today())}`;
+      c.obs = c.obs ? c.obs + '\n' + obsLine : obsLine;
       saveToStorage();
       showToast(`✅ Enviado para ${c.empresa}`);
     } else {
-      showToast(`⚠️ Falha ao enviar para ${c.empresa}`, 'error');
+      // Número inválido — pula e registra para mostrar no final
+      if (!window.failedDispatch) window.failedDispatch = [];
+      window.failedDispatch.push({ empresa: c.empresa, whatsapp: c.whatsapp, id: c.id });
+      showToast(`⚠️ Pulando ${c.empresa} — número inválido`, 'error');
     }
 
   } catch(e) {
-    console.error('Erro envio:', e);
-    showToast(`⚠️ Erro ao enviar para ${c.empresa}`, 'error');
+    if (!window.failedDispatch) window.failedDispatch = [];
+    window.failedDispatch.push({ empresa: c.empresa, whatsapp: c.whatsapp, id: c.id });
+    showToast(`⚠️ Pulando ${c.empresa} — erro no envio`, 'error');
   }
 
   dispatchIndex++;
@@ -917,10 +1036,31 @@ function finishDispatch() {
   dispatchRunning = false;
   document.getElementById('startDispatchBtn').style.display = 'inline-flex';
   document.getElementById('stopDispatchBtn').style.display = 'none';
-  document.getElementById('progressLabel').textContent = '✅ Todos enviados!';
+  document.getElementById('progressLabel').textContent = '✅ Concluído!';
   document.getElementById('progressBar').style.width = '100%';
-  document.getElementById('dispatchStatus').textContent = `✅ Disparo concluído! ${dispatchQueue.length} mensagens enviadas.`;
-  showToast(`🎉 Disparo concluído! ${dispatchQueue.length} mensagens enviadas!`);
+
+  const failed = window.failedDispatch || [];
+  const sent = dispatchQueue.length - failed.length;
+
+  document.getElementById('dispatchStatus').textContent = `✅ ${sent} enviados · ⚠️ ${failed.length} com erro`;
+
+  if (failed.length > 0) {
+    const alertEl = document.getElementById('noWhatsappAlert');
+    const listEl = document.getElementById('noWhatsappList');
+    alertEl.style.display = 'block';
+    alertEl.querySelector('p').textContent = `⚠️ ${failed.length} número(s) com erro — corrija e reenvie:`;
+    listEl.innerHTML = failed.map(f => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:0.4rem 0;border-bottom:1px solid rgba(239,68,68,0.2);font-size:0.83rem">
+        <span style="color:var(--text)">${f.empresa} — <small style="color:var(--text2)">${f.whatsapp}</small></span>
+        <button class="btn btn-outline" style="font-size:0.72rem;padding:0.25rem 0.5rem" onclick="openEditModal('${f.id}')">✏️ Corrigir</button>
+      </div>
+    `).join('');
+    showToast(`⚠️ ${failed.length} números com erro! Verifique a lista.`, 'error');
+  } else {
+    showToast(`🎉 Disparo concluído! ${sent} mensagens enviadas!`);
+  }
+
+  window.failedDispatch = [];
   renderDashboard();
   renderContactsDay();
 }
