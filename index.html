@@ -63,6 +63,10 @@
         <input type="text" id="f_whatsapp" placeholder="5511999999999" />
       </div>
       <div class="form-group form-full">
+        <label>Endereço</label>
+        <input type="text" id="f_endereco" placeholder="Rua, número, bairro, cidade" />
+      </div>
+      <div class="form-group form-full">
         <label>Observações</label>
         <textarea id="f_obs" rows="3" placeholder="Anotações livres sobre o cliente..."></textarea>
       </div>
@@ -110,7 +114,10 @@
 <nav class="sidebar" id="sidebar">
   <div class="sidebar-logo">
     <span class="logo-icon">🔧</span>
-    <span class="logo-text">AutoPeças<br><small>CRM B2B</small></span>
+    <div>
+      <span class="logo-text">AutoPeças<br><small>CRM B2B</small></span>
+      <div id="wppSidebarStatus" style="font-size:0.72rem;margin-top:0.2rem;color:#ef4444">🔴 WhatsApp desconectado</div>
+    </div>
   </div>
   <ul class="nav-menu">
     <li><a href="#" class="nav-link active" data-page="dashboard" onclick="navigate('dashboard')">🏠 Dashboard</a></li>
@@ -196,6 +203,29 @@
       </div>
     </div>
 
+    <!-- TERMÔMETRO DE COMPRAS -->
+    <h2 class="section-title">🛒 Temperatura de Compras</h2>
+    <div class="temp-grid">
+      <div class="temp-card hot" onclick="filterByPurchase('recent')">
+        <div class="temp-emoji">🔥</div>
+        <div class="temp-count" id="buyHotCount">0</div>
+        <div class="temp-label">RECENTE</div>
+        <div class="temp-sub">Compra nos últimos 7 dias</div>
+      </div>
+      <div class="temp-card warm" onclick="filterByPurchase('medium')">
+        <div class="temp-emoji">🌤️</div>
+        <div class="temp-count" id="buyWarmCount">0</div>
+        <div class="temp-label">MÉDIO</div>
+        <div class="temp-sub">8 a 30 dias sem comprar</div>
+      </div>
+      <div class="temp-card cold" onclick="filterByPurchase('old')">
+        <div class="temp-emoji">🧊</div>
+        <div class="temp-count" id="buyColdCount">0</div>
+        <div class="temp-label">INATIVO</div>
+        <div class="temp-sub">Mais de 30 dias sem comprar</div>
+      </div>
+    </div>
+
     <!-- ALERT STRIP -->
     <div id="alertStrip" class="alert-strip" style="display:none">
       ⚠️ <span id="alertStripText"></span>
@@ -225,12 +255,16 @@
           <option value="hot">🔥 Quentes</option>
           <option value="warm">🌤️ Mornos</option>
           <option value="cold">🧊 Frios</option>
-          <option value="nocontact">⚠️ Sem contato +15 dias</option>
+          <option value="nocontact">⚠️ Sem contato +10 dias</option>
+          <option value="today">📞 Contatados Hoje</option>
+          <option value="month">🛒 Compraram no Mês</option>
           <option value="today">📞 Contatados Hoje</option>
           <option value="month">🛒 Compraram no Mês</option>
         </select>
+        <button class="btn btn-outline" onclick="checkDuplicates()">🔁 Duplicatas</button>
       </div>
     </div>
+    <div id="duplicatesAlert" style="display:none;background:rgba(234,179,8,0.1);border:1px solid #eab308;border-radius:10px;padding:1rem;margin-bottom:1rem"></div>
     <div id="clientsList" class="clients-list"></div>
     <div id="emptyState" class="empty-state" style="display:none">
       <p>Nenhum cliente encontrado 😕</p>
@@ -371,7 +405,7 @@
 </div>
 
 <div style="position:fixed;bottom:0.5rem;right:0.75rem;font-size:0.7rem;color:#3d4466;z-index:100;pointer-events:none">
-  v1.8 · atualizado 16/05/2026
+  v1.9 · atualizado 18/05/2026
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
