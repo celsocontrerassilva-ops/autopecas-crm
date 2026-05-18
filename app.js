@@ -454,7 +454,7 @@ function saveObs(id, value) {
 }
 
 function openWhatsApp(number, name) {
-  const clean = number.replace(/\D/g, '');
+  const clean = String(number || '').replace(/\D/g, '');
   const hora = new Date().getHours();
   const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
   
@@ -975,18 +975,20 @@ async function sendNextMessage() {
     `${saudacao}! É o Celso aqui, da Toyota T-line 👋 Passando pra não sumir! rsrs Alguma peça precisando essa semana? Estou com alguns itens em promoção e pensei em vocês. Me fala o que precisar 😊`,
   ];
   const msg = msgs[Math.floor(Math.random() * msgs.length)];
-  const clean = c.whatsapp.replace(/\D/g, '');
+  const clean = String(c.whatsapp || '').replace(/\D/g, '');
 
   // Envia via Evolution API — SEMPRE avança para o próximo independente do resultado
   try {
     const sendRes = await fetch(`${EVOLUTION_URL}/message/sendText/${EVOLUTION_INSTANCE}`, {
       method: 'POST',
+      mode: 'cors',
       headers: { 
         'Content-Type': 'application/json', 
-        'apikey': EVOLUTION_KEY 
+        'apikey': EVOLUTION_KEY,
+        'Access-Control-Allow-Origin': '*'
       },
       body: JSON.stringify({ 
-        number: clean + '@s.whatsapp.net',
+        number: clean,
         text: msg,
         delay: 1000
       })
@@ -995,7 +997,7 @@ async function sendNextMessage() {
     let sendData = {};
     try { sendData = await sendRes.json(); } catch(e) {}
 
-    if (sendRes.ok || sendData.key || sendData.status === 'PENDING') {
+    if (sendRes.ok || sendData.key || sendData.status === 'PENDING' || sendRes.status === 201) {
       // Sucesso — marca como contatado
       c.lastContact = today();
       if (!c.history) c.history = [];
