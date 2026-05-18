@@ -9,6 +9,11 @@ let editingClientId = null;
 let importBuffer = [];
 let SHEETS_URL = '';
 
+// ---- EVOLUTION API CONFIG ----
+const EVOLUTION_URL = 'https://evolution-api-production-da04e.up.railway.app';
+const EVOLUTION_KEY = '8c862d27ead59faf3be57be501113debeb6c41a4ed87488d5e110ab7c93f38b4';
+const EVOLUTION_INSTANCE = 'autopecas';
+
 // ---- INIT ----
 document.addEventListener('DOMContentLoaded', async () => {
   SHEETS_URL = localStorage.getItem('sheetsUrl') || '';
@@ -1070,9 +1075,6 @@ function finishDispatch() {
 }
 
 // ---- WHATSAPP / EVOLUTION API ----
-const EVOLUTION_URL = 'https://evolution-api-production-da04e.up.railway.app';
-const EVOLUTION_KEY = '8c862d27ead59faf3be57be501113debeb6c41a4ed87488d5e110ab7c93f38b4';
-const EVOLUTION_INSTANCE = 'autopecas';
 
 let qrCheckInterval = null;
 
