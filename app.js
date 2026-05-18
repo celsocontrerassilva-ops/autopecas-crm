@@ -861,20 +861,35 @@ async function sendNextMessage() {
 
   // Envia via Evolution API
   try {
-    await fetch(`${EVOLUTION_URL}/message/sendText/${EVOLUTION_INSTANCE}`, {
+    const sendRes = await fetch(`${EVOLUTION_URL}/message/sendText/${EVOLUTION_INSTANCE}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': EVOLUTION_KEY },
-      body: JSON.stringify({ number: clean, text: msg })
+      headers: { 
+        'Content-Type': 'application/json', 
+        'apikey': EVOLUTION_KEY 
+      },
+      body: JSON.stringify({ 
+        number: clean + '@s.whatsapp.net',
+        text: msg,
+        delay: 1000
+      })
     });
 
-    // Marca como contatado
-    c.lastContact = today();
-    if (!c.history) c.history = [];
-    c.history.unshift({ type: 'contact', date: today(), label: 'Mensagem automática enviada' });
-    saveToStorage();
-    showToast(`✅ Mensagem enviada para ${c.empresa}`);
+    const sendData = await sendRes.json();
+    console.log('Resposta envio:', sendData);
+
+    if (sendRes.ok || sendData.key) {
+      // Marca como contatado
+      c.lastContact = today();
+      if (!c.history) c.history = [];
+      c.history.unshift({ type: 'contact', date: today(), label: 'Mensagem automática enviada' });
+      saveToStorage();
+      showToast(`✅ Enviado para ${c.empresa}`);
+    } else {
+      showToast(`⚠️ Falha ao enviar para ${c.empresa}`, 'error');
+    }
 
   } catch(e) {
+    console.error('Erro envio:', e);
     showToast(`⚠️ Erro ao enviar para ${c.empresa}`, 'error');
   }
 
