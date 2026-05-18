@@ -972,7 +972,7 @@ async function sendNextMessage() {
   const msg = msgs[Math.floor(Math.random() * msgs.length)];
   const clean = c.whatsapp.replace(/\D/g, '');
 
-  // Envia via Evolution API
+  // Envia via Evolution API — SEMPRE avança para o próximo independente do resultado
   try {
     const sendRes = await fetch(`${EVOLUTION_URL}/message/sendText/${EVOLUTION_INSTANCE}`, {
       method: 'POST',
@@ -987,32 +987,36 @@ async function sendNextMessage() {
       })
     });
 
-    const sendData = await sendRes.json();
+    let sendData = {};
+    try { sendData = await sendRes.json(); } catch(e) {}
 
-    if (sendRes.ok || sendData.key) {
-      // Marca como contatado
+    if (sendRes.ok || sendData.key || sendData.status === 'PENDING') {
+      // Sucesso — marca como contatado
       c.lastContact = today();
       if (!c.history) c.history = [];
       c.history.unshift({ type: 'contact', date: today(), label: 'Mensagem automática enviada' });
-      // Adiciona nas observações
       const obsLine = `📤 Mensagem automática enviada em ${formatDate(today())}`;
       c.obs = c.obs ? c.obs + '\n' + obsLine : obsLine;
       saveToStorage();
       showToast(`✅ Enviado para ${c.empresa}`);
     } else {
-      // Número inválido — pula e registra para mostrar no final
+      // Falhou — registra e pula
       if (!window.failedDispatch) window.failedDispatch = [];
       window.failedDispatch.push({ empresa: c.empresa, whatsapp: c.whatsapp, id: c.id });
-      showToast(`⚠️ Pulando ${c.empresa} — número inválido`, 'error');
+      showToast(`⚠️ Pulando ${c.empresa}`, 'error');
     }
 
   } catch(e) {
+    // Erro de rede — registra e pula
     if (!window.failedDispatch) window.failedDispatch = [];
     window.failedDispatch.push({ empresa: c.empresa, whatsapp: c.whatsapp, id: c.id });
-    showToast(`⚠️ Pulando ${c.empresa} — erro no envio`, 'error');
+    showToast(`⚠️ Pulando ${c.empresa} — erro`, 'error');
   }
 
+  // SEMPRE avança para o próximo
   dispatchIndex++;
+
+  if (!dispatchRunning) return;
 
   if (dispatchIndex < dispatchQueue.length) {
     const interval = (parseInt(document.getElementById('msgInterval')?.value) || 8) * 60 * 1000;
