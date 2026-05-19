@@ -656,32 +656,68 @@ function parseCSV(text) {
   if (lines.length < 2) { showToast('❌ Arquivo vazio ou inválido', 'error'); return; }
 
   const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[^a-z]/g,''));
+  
+  // Detecta se é formato completo (com id, lastContact, etc)
+  const isFullFormat = headers.includes('id') && headers.includes('lastcontact');
+
   const colMap = {
+    id: headers.findIndex(h => h === 'id'),
     empresa: headers.findIndex(h => h.includes('empres') || h.includes('razao') || h.includes('nome')),
     cnpj: headers.findIndex(h => h.includes('cnpj')),
     contato: headers.findIndex(h => h.includes('contato') || h.includes('responsavel')),
     telefone: headers.findIndex(h => h.includes('telefone') || h.includes('fone')),
     email: headers.findIndex(h => h.includes('email') || h.includes('mail')),
     whatsapp: headers.findIndex(h => h.includes('whatsapp') || h.includes('wpp')),
-    obs: headers.findIndex(h => h.includes('obs') || h.includes('nota'))
+    obs: headers.findIndex(h => h === 'obs' || h.includes('observa')),
+    lastContact: headers.findIndex(h => h.includes('lastcontact')),
+    lastPurchase: headers.findIndex(h => h.includes('lastpurchase')),
+    purchaseCount: headers.findIndex(h => h.includes('purchasecount')),
+    createdAt: headers.findIndex(h => h.includes('createdat')),
+    history: headers.findIndex(h => h.includes('history')),
+    endereco: headers.findIndex(h => h.includes('endereco') || h.includes('endere'))
   };
 
   importBuffer = [];
+
+  // Parse respeitando campos entre aspas
   for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g,''));
+    const line = lines[i];
+    if (!line.trim()) continue;
+    
+    // Split respeitando aspas
+    const cols = [];
+    let current = '';
+    let inQuotes = false;
+    for (let c of line) {
+      if (c === '"') { inQuotes = !inQuotes; }
+      else if (c === ',' && !inQuotes) { cols.push(current.trim()); current = ''; }
+      else { current += c; }
+    }
+    cols.push(current.trim());
+
     const empresa = colMap.empresa >= 0 ? cols[colMap.empresa] : '';
-    if (!empresa) continue;
+    if (!empresa || empresa === 'Empresa sem nome') continue;
+
+    let history = [];
+    if (colMap.history >= 0 && cols[colMap.history]) {
+      try { history = JSON.parse(cols[colMap.history] || '[]'); } catch(e) { history = []; }
+    }
+
     importBuffer.push({
-      id: generateId(),
+      id: (colMap.id >= 0 && cols[colMap.id]) ? cols[colMap.id] : generateId(),
       empresa,
-      cnpj: colMap.cnpj >= 0 ? cols[colMap.cnpj] : '',
-      contato: colMap.contato >= 0 ? cols[colMap.contato] : '',
-      telefone: colMap.telefone >= 0 ? cols[colMap.telefone] : '',
-      email: colMap.email >= 0 ? cols[colMap.email] : '',
-      whatsapp: colMap.whatsapp >= 0 ? cols[colMap.whatsapp] : '',
-      obs: colMap.obs >= 0 ? cols[colMap.obs] : '',
-      lastContact: null, lastPurchase: null,
-      purchaseCount: 0, history: [], createdAt: today()
+      cnpj: colMap.cnpj >= 0 ? cols[colMap.cnpj] || '' : '',
+      contato: colMap.contato >= 0 ? cols[colMap.contato] || '' : '',
+      telefone: colMap.telefone >= 0 ? cols[colMap.telefone] || '' : '',
+      email: colMap.email >= 0 ? cols[colMap.email] || '' : '',
+      whatsapp: colMap.whatsapp >= 0 ? cols[colMap.whatsapp] || '' : '',
+      endereco: colMap.endereco >= 0 ? cols[colMap.endereco] || '' : '',
+      obs: colMap.obs >= 0 ? cols[colMap.obs] || '' : '',
+      lastContact: colMap.lastContact >= 0 ? normalizeDate(cols[colMap.lastContact]) || null : null,
+      lastPurchase: colMap.lastPurchase >= 0 ? normalizeDate(cols[colMap.lastPurchase]) || null : null,
+      purchaseCount: colMap.purchaseCount >= 0 ? parseInt(cols[colMap.purchaseCount]) || 0 : 0,
+      createdAt: colMap.createdAt >= 0 ? normalizeDate(cols[colMap.createdAt]) || today() : today(),
+      history
     });
   }
 
