@@ -61,7 +61,14 @@ async function loadData() {
       const res = await fetch(SHEETS_URL, { method: 'GET' });
       const json = await res.json();
       if (json.status === 'ok' && Array.isArray(json.clients)) {
-        clients = json.clients;
+        // Normaliza history de cada cliente (pode vir como string do Sheets)
+        clients = json.clients.map(c => {
+          if (typeof c.history === 'string') {
+            try { c.history = JSON.parse(c.history); } catch(e) { c.history = []; }
+          }
+          if (!Array.isArray(c.history)) c.history = [];
+          return c;
+        });
         localStorage.setItem('crm_clients', JSON.stringify(clients));
         return; // sucesso, não precisa do local
       }
@@ -402,7 +409,7 @@ function renderClientCard(c, compact) {
       <button class="btn btn-purchase" onclick="markPurchased('${c.id}')">🛒 Comprou</button>
       ${c.whatsapp ? `<button class="btn btn-whatsapp" onclick="openWhatsApp('${c.whatsapp}', '${c.empresa.replace(/'/g,"\\'")}')">💬 WhatsApp</button>` : ''}
       <button class="btn btn-history" onclick="showHistory('${c.id}')">📅 Histórico</button>
-      <button class="btn btn-edit" onclick="openEditModal('${c.id}')">✏️ Editar</button>
+      <button class="btn btn-edit" onclick="openEditModal('${c.id}')" data-id="${c.id}">✏️ Editar</button>
       <button class="btn btn-danger" onclick="openDeleteModal('${c.id}')">🗑️</button>
     </div>
     <div class="client-obs">
@@ -476,7 +483,14 @@ function openWhatsApp(number, name) {
 function showHistory(id) {
   const c = clients.find(x => x.id === id);
   if (!c) return;
-  const history = c.history || [];
+  
+  // Garante que history é array (pode vir como string do Sheets)
+  let history = c.history || [];
+  if (typeof history === 'string') {
+    try { history = JSON.parse(history); } catch(e) { history = []; }
+  }
+  if (!Array.isArray(history)) history = [];
+
   const content = document.getElementById('historyContent');
   if (history.length === 0) {
     content.innerHTML = '<p style="color:var(--text2);text-align:center;padding:1rem">Nenhuma interação registrada ainda.</p>';
@@ -484,7 +498,7 @@ function showHistory(id) {
     content.innerHTML = history.slice(0, 20).map(h => `
       <div class="history-item">
         <span>${h.type === 'purchase' ? '🛒' : '📞'}</span>
-        <span>${h.label}</span>
+        <span>${h.label || 'Interação'}</span>
         <span class="history-date">${formatDate(h.date)}</span>
       </div>
     `).join('');
@@ -528,17 +542,23 @@ function openClientModal() {
 
 function openEditModal(id) {
   const c = clients.find(x => x.id === id);
-  if (!c) return;
+  if (!c) { showToast('❌ Cliente não encontrado', 'error'); return; }
   editingClientId = id;
+  
+  const set = (elId, val) => {
+    const el = document.getElementById(elId);
+    if (el) el.value = val || '';
+  };
+  
   document.getElementById('clientModalTitle').textContent = '✏️ Editar Cliente';
-  document.getElementById('f_empresa').value = c.empresa || '';
-  document.getElementById('f_cnpj').value = c.cnpj || '';
-  document.getElementById('f_contato').value = c.contato || '';
-  document.getElementById('f_telefone').value = c.telefone || '';
-  document.getElementById('f_email').value = c.email || '';
-  document.getElementById('f_whatsapp').value = c.whatsapp || '';
-  document.getElementById('f_endereco').value = c.endereco || '';
-  document.getElementById('f_obs').value = c.obs || '';
+  set('f_empresa', c.empresa);
+  set('f_cnpj', c.cnpj);
+  set('f_contato', c.contato);
+  set('f_telefone', c.telefone);
+  set('f_email', c.email);
+  set('f_whatsapp', c.whatsapp);
+  set('f_endereco', c.endereco);
+  set('f_obs', c.obs);
   document.getElementById('clientModal').style.display = 'flex';
 }
 
